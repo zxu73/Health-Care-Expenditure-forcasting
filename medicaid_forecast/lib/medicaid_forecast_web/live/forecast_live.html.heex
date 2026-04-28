@@ -1,0 +1,121 @@
+<div class="min-h-screen bg-gray-50 py-8 px-4">
+  <div class="max-w-5xl mx-auto">
+
+    <%!-- Header --%>
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900">
+        Medicaid Expenditure Forecast
+      </h1>
+      <p class="mt-1 text-gray-500 text-sm">
+        Holt-Winters projection (FY 2026–2035) · Data: MFCU Statistical Reports FY 2013–2025
+      </p>
+    </div>
+
+    <%!-- State selector --%>
+    <div class="mb-6 flex items-center gap-3">
+      <label for="state-select" class="text-sm font-medium text-gray-700 whitespace-nowrap">
+        Select State / Territory:
+      </label>
+      <form phx-change="select_state" class="flex-1 max-w-xs">
+        <select
+          id="state-select"
+          name="state"
+          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 bg-white border"
+        >
+          <%= for state <- @states do %>
+            <option value={state} selected={state == @selected}><%= state %></option>
+          <% end %>
+        </select>
+      </form>
+    </div>
+
+    <%!-- Chart card --%>
+    <div class="bg-white rounded-xl shadow p-6 mb-6">
+      <h2 class="text-lg font-semibold text-gray-800 mb-4">
+        <%= @selected %> — Total Medicaid Expenditures ($Billions)
+      </h2>
+      <div class="relative" style="height: 380px;">
+        <canvas
+          id="forecast-chart"
+          phx-hook="ForecastChart"
+          data-chart={Jason.encode!(@state_data)}
+        ></canvas>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+        <span class="flex items-center gap-1">
+          <span class="inline-block w-6 h-0.5 bg-blue-500"></span> Historical (actual)
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="inline-block w-6 h-0.5 bg-orange-400" style="border-top: 2px dashed #f97316; height:0"></span> Forecast
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="inline-block w-4 h-3 bg-orange-100 border border-orange-200 rounded-sm"></span> 95% CI
+        </span>
+      </div>
+    </div>
+
+    <%!-- Metrics row --%>
+    <%= if map_size(@state_data) > 0 do %>
+      <% m = @state_data["metrics"] %>
+      <%= if m && map_size(m) > 0 do %>
+        <div class="grid grid-cols-3 gap-4 mb-6">
+          <div class="bg-white rounded-xl shadow p-4 text-center">
+            <div class="text-xs text-gray-500 uppercase tracking-wide">MAE (test)</div>
+            <div class="text-2xl font-bold text-blue-600 mt-1">$<%= :erlang.float_to_binary(m["mae"], decimals: 2) %>B</div>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4 text-center">
+            <div class="text-xs text-gray-500 uppercase tracking-wide">RMSE (test)</div>
+            <div class="text-2xl font-bold text-blue-600 mt-1">$<%= :erlang.float_to_binary(m["rmse"], decimals: 2) %>B</div>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4 text-center">
+            <div class="text-xs text-gray-500 uppercase tracking-wide">MAPE (test)</div>
+            <div class="text-2xl font-bold text-blue-600 mt-1"><%= :erlang.float_to_binary(m["mape"], decimals: 1) %>%</div>
+          </div>
+        </div>
+      <% end %>
+    <% end %>
+
+    <%!-- Forecast table --%>
+    <%= if map_size(@state_data) > 0 do %>
+      <div class="bg-white rounded-xl shadow overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-base font-semibold text-gray-800">10-Year Forecast Detail</h2>
+        </div>
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Forecast ($B)</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Lower 95% CI</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Upper 95% CI</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-100">
+            <%= for {year, i} <- Enum.with_index(@meta["forecast_years"]) do %>
+              <% fc  = Enum.at(@state_data["forecast"],  i) %>
+              <% lo  = Enum.at(@state_data["ci_lower"],  i) %>
+              <% hi  = Enum.at(@state_data["ci_upper"],  i) %>
+              <tr class={if rem(i, 2) == 0, do: "bg-white", else: "bg-gray-50"}>
+                <td class="px-6 py-3 font-medium text-gray-900">FY <%= year %></td>
+                <td class="px-6 py-3 text-right text-gray-700">
+                  <%= if fc, do: "$#{:erlang.float_to_binary(fc, decimals: 2)}B", else: "—" %>
+                </td>
+                <td class="px-6 py-3 text-right text-gray-500">
+                  <%= if lo, do: "$#{:erlang.float_to_binary(lo, decimals: 2)}B", else: "—" %>
+                </td>
+                <td class="px-6 py-3 text-right text-gray-500">
+                  <%= if hi, do: "$#{:erlang.float_to_binary(hi, decimals: 2)}B", else: "—" %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+
+    <p class="mt-6 text-center text-xs text-gray-400">
+      Data source: OIG MFCU Statistical Reports · Model: Holt-Winters (additive trend) · Generated <%= @meta["generated_at"] %>
+    </p>
+
+  </div>
+</div>

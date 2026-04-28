@@ -1,6 +1,6 @@
-# Medicaid Expenditure Projection Model — New York State
+# Medicaid Expenditure Projection Model
 
-A data-driven forecasting project that projects **New York State Total Medicaid Expenditures** through FY 2035 using MFCU (Medicaid Fraud Control Unit) annual statistical reports from FY 2013–2025.
+A data-driven forecasting project that projects **Total Medicaid Expenditures** through FY 2035 for all 53 US states and territories, using MFCU (Medicaid Fraud Control Unit) annual statistical reports from FY 2013–2025. Includes an interactive **Phoenix/Elixir web application** for exploring state-level forecasts.
 
 ---
 
@@ -115,11 +115,13 @@ Four-panel chart:
 
 ## Setup
 
+### Python dependencies
+
 ```bash
 pip install pandas openpyxl scikit-learn matplotlib statsmodels prophet
 ```
 
-### Run
+### Run analysis scripts
 
 ```bash
 # Regression baseline (outputs regression_results.png)
@@ -136,15 +138,79 @@ glob.glob("FY_*_MFCU_Statistical_Chart*.xlsx")
 
 ---
 
+## Web Application
+
+An interactive **Phoenix 1.8 + LiveView** app that lets users explore Holt-Winters forecasts for any state.
+
+### Features
+
+- Dropdown to select any US state or territory (53 total)
+- Interactive Chart.js chart — historical actuals (solid), forecast (dashed), 95% CI band (shaded)
+- Forecast table — FY 2026–2035 with lower/upper confidence bounds
+- Model accuracy metrics — MAE, RMSE, MAPE on FY 2023–2025 test set
+- State switches are instant via WebSocket — no page reload
+
+### Prerequisites
+
+- Elixir 1.19+ and Erlang/OTP 28+
+
+Install on Windows:
+```powershell
+winget install Erlang.ErlangOTP
+# Download elixir-otp-28.exe from https://elixir-lang.org/install.html
+mix local.hex --force
+mix archive.install hex phx_new --force
+```
+
+### Step 1 — Generate forecast data (run once)
+
+```bash
+python export_all_states.py
+```
+
+Outputs `medicaid_forecast/priv/data/all_states_forecast.json` with Holt-Winters forecasts for all 53 states.
+
+### Step 2 — Install Elixir dependencies
+
+```bash
+cd medicaid_forecast
+mix deps.get
+```
+
+### Step 3 — Start the server
+
+```powershell
+$env:Path = "C:\Program Files\Elixir\bin;C:\Program Files\Erlang OTP\bin;$env:Path"
+mix phx.server
+```
+
+Visit **http://localhost:4000**
+
+### Architecture
+
+```
+medicaid_forecast/
+├── lib/medicaid_forecast/data_server.ex          # GenServer — holds all state data in memory
+├── lib/medicaid_forecast_web/live/
+│   ├── forecast_live.ex                          # LiveView — handles state selection events
+│   └── forecast_live.html.heex                   # UI template
+├── assets/js/forecast_chart.js                   # Chart.js hook
+└── priv/data/all_states_forecast.json            # Pre-computed forecasts (from export script)
+```
+
+---
+
 ## Repository Structure
 
 ```
 ├── FY_YYYY_MFCU_Statistical_Chart.xlsx   # Raw data (FY 2013–2025, 13 files)
-├── regression_model.py                   # Linear / Polynomial / Multi-feature models
-├── all_models.py                         # ARIMA + Holt-Winters + Prophet comparison
+├── regression_model.py                   # Linear / Polynomial / Multi-feature models (NY)
+├── all_models.py                         # 4-model comparison: Poly, ARIMA, HW, Prophet (NY)
+├── export_all_states.py                  # Generates Holt-Winters forecasts for all states
 ├── regression_results.png                # Output chart from regression_model.py
 ├── all_models_results.png                # Output chart from all_models.py
-└── forecast_table.csv                    # 10-year forecast table (all four models)
+├── forecast_table.csv                    # NY 10-year forecast table (all four models)
+└── medicaid_forecast/                    # Phoenix web application
 ```
 
 ---
